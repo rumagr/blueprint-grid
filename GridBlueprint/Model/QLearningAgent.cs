@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Mars.Components.Services.Explorations;
 using Mars.Interfaces.Agents;
 using Mars.Interfaces.Annotations;
 using Mars.Interfaces.Environments;
@@ -24,7 +25,22 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
         Position = new Position(StartX, StartY);
         _directions = CreateMovementDirectionsList();
         _layer.QLearningAgentEnvironment.Insert(this);
+        _qTable = new double[_layer.Width, _layer.Height][];
+        InitQTable();
     }
+
+    public void InitQTable()
+    {
+            // Initialize Q-table with zeros
+        for (int i = 0; i < _layer.Width; i++)
+        {
+            for (int j = 0; j < _layer.Height; j++)
+            {
+                _qTable[i, j] = new double[4]; // Assuming 4 actions (up, down, left, right)
+            }
+        }
+    }    
+
 
     #endregion
 
@@ -38,12 +54,7 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
     /// </summary>
     public void Tick()
     {
-        MoveRandomly();
-        
-        if (_layer.GetCurrentTick() == 595)
-        {
-            RemoveFromSimulation();
-        }
+        determineNextPosition();
     }
 
     #endregion
@@ -59,13 +70,9 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
         return new List<Position>
         {
             MovementDirections.North,
-            MovementDirections.Northeast,
             MovementDirections.East,
-            MovementDirections.Southeast,
             MovementDirections.South,
-            MovementDirections.Southwest,
             MovementDirections.West,
-            MovementDirections.Northwest
         };
     }
     
@@ -84,7 +91,8 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
     /// </summary>
     private void MoveRandomly()
     {
-        var nextDirection = _directions[_random.Next(_directions.Count)];
+        var nextAction = _random.Next(_directions.Count);
+        var nextDirection = _directions[nextAction];
         var newX = Position.X + nextDirection.X;
         var newY = Position.Y + nextDirection.Y;
 
@@ -94,19 +102,139 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
             // Check if chosen move goes to a cell that is routable
             if (_layer.IsRoutable(newX, newY))
             {
+                updateQTable(Position,nextAction , 0, new Position(newX, newY));
                 Position = new Position(newX, newY);
                 _layer.QLearningAgentEnvironment.MoveTo(this, new Position(newX, newY));
                 Console.WriteLine("{0} moved to a new cell: {1}", GetType().Name, Position);
             }
-            else
+            else if (_layer.IsExit((int) newX,(int) newY))
             {
+                updateQTable(Position,nextAction , 10, new Position(newX, newY));
+                Position = new Position(newX, newY);
+                _layer.QLearningAgentEnvironment.MoveTo(this, new Position(newX, newY));
+                Console.WriteLine("{0} moved to the exit cell: {1}", GetType().Name, Position);
+                RemoveFromSimulation();
+            }
+            else
+            { 
+                updateQTable(Position,nextAction , -1, new Position(newX, newY));
                 Console.WriteLine("{0} tried to move to a blocked cell: ({1}, {2})", GetType().Name, newX, newY);
+                resetToStart();
             }
         }
         else
         {
+            updateQTable(Position,nextAction , -1, new Position(newX, newY));
             Console.WriteLine("{0} tried to leave the world: ({1}, {2})", GetType().Name, newX, newY);
+            resetToStart();
         }
+    }
+    
+    /// <summary>
+    /// resets the agent's position to the start position
+    /// </summary>
+    public void resetToStart()
+    {
+        Position = new Position(StartX, StartY);
+        _layer.QLearningAgentEnvironment.MoveTo(this, new Position(StartX, StartY));
+        Console.WriteLine("{0} was reset to the start position: {1}", GetType().Name, Position);
+    }
+    
+    public void updateQTable(Position state, int action, double reward, Position nextState)
+    {
+        var currentStateX = (int) state.X;
+        var currentStateY = (int) state.Y;
+        var nextStateX = (int) nextState.X;
+        var nextStateY = (int) nextState.Y;
+        
+        var oldValue = _qTable[currentStateX, currentStateY][action];
+        var nextMax = GetBestActionForState(nextStateX, nextStateY);
+        double newValue = 0;
+        if(nextMax >= 0)
+        {
+            newValue = oldValue + alpha * (reward + gamma * _qTable[nextStateX,nextStateY][nextMax] - oldValue);
+        }
+        _qTable[currentStateX, currentStateY][action] = newValue;
+        //TODO update Q-table using Q-learning formula
+    }
+    
+    public void determineNextPosition()
+    {
+        if (IsTrueWithChance(epsilon))
+        {
+            MoveRandomly();
+        }
+        else 
+        {
+            int nextAction = GetBestActionForState((int) Position.X, (int) Position.Y);
+            
+            var nextDirection = _directions[nextAction];
+            var newX = Position.X + nextDirection.X;
+            var newY = Position.Y + nextDirection.Y;
+            
+            // Check if chosen move is within the bounds of the grid
+            if (0 <= newX && newX < _layer.Width && 0 <= newY && newY < _layer.Height)
+            {
+                // Check if chosen move goes to a cell that is routable
+                if (_layer.IsRoutable(newX, newY))
+                {
+                    updateQTable(Position, nextAction, 0, new Position(newX, newY));
+                    Position = new Position(newX, newY);
+                    _layer.QLearningAgentEnvironment.MoveTo(this, new Position(newX, newY));
+                    Console.WriteLine("{0} moved to a new cell: {1}", GetType().Name, Position);
+                }
+                else if (_layer.IsExit((int) newX,(int) newY))
+                {
+                    updateQTable(Position, nextAction, 10, new Position(newX, newY));
+                    Position = new Position(newX, newY);
+                    _layer.QLearningAgentEnvironment.MoveTo(this, new Position(newX, newY));
+                    Console.WriteLine("{0} moved to the exit cell: {1}", GetType().Name, Position);
+                    RemoveFromSimulation();
+                }
+                else
+                {
+                    updateQTable(Position, nextAction, -1, new Position(newX, newY));
+                    Console.WriteLine("{0} tried to move to a blocked cell: ({1}, {2})", GetType().Name, newX, newY);
+                    resetToStart();
+                }
+            }
+            else
+            {
+                updateQTable(Position, nextAction, -1, new Position(newX, newY));
+                Console.WriteLine("{0} tried to leave the world: ({1}, {2})", GetType().Name, newX, newY);
+                resetToStart();
+            }
+        }
+    }
+    
+    public int GetBestActionForState(int x, int y)
+    {
+        if (x < 0 || x >= _layer.Width || y < 0 || y >= _layer.Height)
+        {
+            return -1; // Invalid state
+        }
+        double[] actions = _qTable[x, y];
+        int maxActionIndex = 0;
+        double maxValue = actions[0];
+
+        for (int i = 1; i < actions.Length; i++)
+        {
+            if (actions[i] > maxValue)
+            {
+                maxValue = actions[i];
+                maxActionIndex = i;
+            }
+            else if (actions[i] == maxValue)
+            {
+                if (IsTrueWithChance(0.5))
+                {
+                    maxValue = actions[i];
+                    maxActionIndex = i; 
+                }
+            }
+        }
+        
+        return maxActionIndex;
     }
 
     /// <summary>
@@ -116,7 +244,14 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
     {
         MeetingCounter += 1;
     }
-
+    
+    private bool IsTrueWithChance(double chance)
+    {
+        Random random = new Random();
+        return random.NextDouble() < chance;
+    }
+    
+    
     #endregion
 
     #region Fields and Properties
@@ -135,6 +270,11 @@ public class QLearningAgent : IAgent<GridLayer>, IPositionable
 
     public UnregisterAgent UnregisterAgentHandle { get; set; }
     
+    public static double epsilon = 0.2; // Exploration rate
+    public static double alpha = 0.8; // Learning rate
+    public static double gamma = 0.6; // Discount factor
+    
+    private double[,][] _qTable;
     private GridLayer _layer;
     private List<Position> _directions;
     private readonly Random _random = new();
