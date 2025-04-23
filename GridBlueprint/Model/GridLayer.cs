@@ -24,14 +24,12 @@ public class GridLayer : RasterLayer
         UnregisterAgent unregisterAgentHandle)
     {
         var initLayer = base.InitLayer(layerInitData, registerAgentHandle, unregisterAgentHandle);
-
-        SimpleAgentEnvironment = new SpatialHashEnvironment<SimpleAgent>(Width, Height);
-        ComplexAgentEnvironment = new SpatialHashEnvironment<ComplexAgent>(Width, Height);
-
+        
+        QLearningAgentEnvironment = new SpatialHashEnvironment<QLearningAgent>(Width, Height);
+        
         var agentManager = layerInitData.Container.Resolve<IAgentManager>();
-
-        SimpleAgents = agentManager.Spawn<SimpleAgent, GridLayer>().ToList();
-        ComplexAgents = agentManager.Spawn<ComplexAgent, GridLayer>().ToList();
+        
+        QLearningAgents = agentManager.Spawn<QLearningAgent, GridLayer>().ToList();
         HelperAgents = agentManager.Spawn<HelperAgent, GridLayer>().ToList();
 
         return initLayer;
@@ -49,6 +47,14 @@ public class GridLayer : RasterLayer
     /// <returns>Boolean representing if (x,y) is accessible</returns>
     public override bool IsRoutable(int x, int y) => this[x, y] == 0;
 
+    /// <summary>
+    ///     Checks if the grid cell (x,y) is the exit
+    /// </summary>
+    /// <param name="x">x-coordinate of grid cell</param>
+    /// <param name="y">y-coordinate of grid cell</param>
+    /// <returns>Boolean representing if (x,y) is the exit</returns>
+    public bool IsExit(int x, int y) => this[x, y] == 2;
+    
     #endregion
 
     #region Fields and Properties
@@ -64,6 +70,11 @@ public class GridLayer : RasterLayer
     public SpatialHashEnvironment<ComplexAgent> ComplexAgentEnvironment { get; set; }
 
     /// <summary>
+    ///     The environment of the Qlearning agents
+    /// </summary>
+    public SpatialHashEnvironment<QLearningAgent> QLearningAgentEnvironment { get; set; }
+    
+    /// <summary>
     ///     A collection that holds the SimpleAgent instances
     /// </summary>
     public List<SimpleAgent> SimpleAgents { get; private set; }
@@ -73,6 +84,11 @@ public class GridLayer : RasterLayer
     /// </summary>
     public List<ComplexAgent> ComplexAgents { get; private set; }
 
+    /// <summary>
+    ///     A collection that holds the QLearningAgent instances
+    /// </summary>
+    public List<QLearningAgent> QLearningAgents { get; private set; }
+    
     /// <summary>
     ///     A collection that holds the HelperAgent instance
     /// </summary>

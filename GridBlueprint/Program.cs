@@ -13,8 +13,7 @@ internal static class Program
         // Create a new model description and add model components to it
         var description = new ModelDescription();
         description.AddLayer<GridLayer>();
-        description.AddAgent<SimpleAgent, GridLayer>();
-        description.AddAgent<ComplexAgent, GridLayer>();
+        description.AddAgent<QLearningAgent, GridLayer>();
         description.AddAgent<HelperAgent, GridLayer>();
 
         // Load the simulation configuration from a JSON configuration file
@@ -23,7 +22,8 @@ internal static class Program
 
         // Couple model description and simulation configuration
         var starter = SimulationStarter.Start(description, config);
-
+        System.Console.WriteLine("Simulation started");
+        
         // Run the simulation
         var handle = starter.Run();
         
